@@ -9,6 +9,7 @@ import {
   Input,
   Layout,
   Modal,
+  Popconfirm,
   Radio,
   Segmented,
   Select,
@@ -270,6 +271,7 @@ type KeyframeCardState = {
   thumbs: Array<{ linkId: number; fileId: string; thumbUrl: string }>
   modalOpen: boolean
   applyingFileId: string | null
+  deletingLinkId: number | null
 }
 
 type KeyframeResolutionProfile = 'standard' | 'high'
@@ -3132,9 +3134,9 @@ function Inspector(props: {
   const [videoReadiness, setVideoReadiness] = useState<ShotVideoReadinessRead | null>(null)
   const [videoReadinessLoading, setVideoReadinessLoading] = useState(false)
   const [keyframeCards, setKeyframeCards] = useState<Record<PromptFrameType, KeyframeCardState>>({
-    first: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null },
-    key: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null },
-    last: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null },
+    first: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null, deletingLinkId: null },
+    key: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null, deletingLinkId: null },
+    last: { loading: false, taskStatus: null, taskId: null, thumbs: [], modalOpen: false, applyingFileId: null, deletingLinkId: null },
   })
   const selectedShotSourceLabel = useMemo(() => {
     if (!selectedShot) return '分镜工作室'
@@ -4327,7 +4329,8 @@ function Inspector(props: {
     void (async () => {
       try {
         let finalTaskState: RelationTaskState | null = null
-        for (let i = 0; i < 60; i += 1) {
+        // 视频生成最长可能 4-5 分钟，轮询上限设为 180 次（6 分钟）避免提前退出导致通知不消失
+        for (let i = 0; i < 180; i += 1) {
           await sleep(2000)
           if (cancelled) return
           const statusRes = await FilmService.getTaskStatusApiV1FilmTasksTaskIdStatusGet({ taskId: videoTaskId })
@@ -4580,23 +4583,21 @@ function Inspector(props: {
     const refFileIds =
       keyframePromptPreviewRefFileIds.length > 0 ? keyframePromptPreviewRefFileIds : autoKeyframeRefFileIds
     const timer = window.setTimeout(() => {
-      void renderShotPromptToTextarea({
-        frameType: keyframePromptPreviewFrameType,
-        prompt: basePrompt,
-        refFileIds,
-      })
+      // 自动同步只更新 context 和 derived，不覆盖 base（避免 trim 导致 textarea 内容跳变、光标错位）
+      // 不设置 shotRenderPromptLoading，否则 textarea 会被 disabled 导致失焦
+      keyframePromptDraft.setContext({ refFileIds })
+      void keyframePromptDraft.deriveNow({ context: { refFileIds } })
     }, 400)
     return () => {
       window.clearTimeout(timer)
     }
   }, [
     autoKeyframeRefFileIds,
+    keyframePromptDraft,
     keyframePromptPreviewDraft,
-    keyframePromptPreviewFrameType,
     keyframePromptPreviewOpen,
     keyframePromptPreviewRefFileIds,
     keyframePromptRenderState,
-    renderShotPromptToTextarea,
   ])
 
   const confirmGenerateKeyframeWithPrompt = async () => {
@@ -4687,6 +4688,31 @@ function Inspector(props: {
       message.error('切换失败')
     } finally {
       updateCardState(frameType, { applyingFileId: null })
+    }
+  }
+
+  /**
+   * 删除某个帧类型下指定的关键帧图片（通过删除对应的 task link 实现）。
+   * 删除后刷新缩略图列表；若删除的是当前使用中的图片，则同时清空 slot 的 file_id。
+   */
+  const deleteCardImage = async (frameType: PromptFrameType, linkId: number, fileId: string) => {
+    updateCardState(frameType, { deletingLinkId: linkId })
+    try {
+      await FilmService.deleteTaskLinkApiV1FilmTaskLinksLinkIdDelete({ linkId })
+      // 若删除的是当前使用中的图片，清空 slot 的 file_id
+      const slot = frameImages.find((x) => x.frame_type === frameType)
+      if (slot && String(slot.file_id) === fileId) {
+        await StudioShotFrameImagesService.updateShotFrameImageApiV1StudioShotFrameImagesImageIdPatch({
+          imageId: slot.id,
+          requestBody: { file_id: null } as any,
+        })
+      }
+      await loadCardThumbs(frameType)
+      message.success('已删除图片')
+    } catch {
+      message.error('删除失败')
+    } finally {
+      updateCardState(frameType, { deletingLinkId: null })
     }
   }
 
@@ -5242,6 +5268,17 @@ function Inspector(props: {
                                         使用
                                       </Button>
                                     )}
+                                    <Popconfirm
+                                      title="确认删除这张图片？"
+                                      okText="删除"
+                                      cancelText="取消"
+                                      okButtonProps={{ danger: true }}
+                                      onConfirm={() => void deleteCardImage(ft, it.linkId, it.fileId)}
+                                    >
+                                      <Button size="small" danger loading={st.deletingLinkId === it.linkId}>
+                                        删除
+                                      </Button>
+                                    </Popconfirm>
                                   </div>
                                 </div>
                               )

@@ -22,6 +22,8 @@ dependencies = [
     "boto3",
     "python-multipart>=0.0.5",
     "jinja2",
+    "asyncpg",
+    "psycopg2-binary>=2.9",
 ]
 
 [project.optional-dependencies]
@@ -125,3 +127,7 @@ min-similarity-lines = 12
 ignore-comments = true
 ignore-docstrings = true
 ignore-imports = true
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true

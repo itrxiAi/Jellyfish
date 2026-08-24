@@ -22,7 +22,12 @@ def bootstrap_builtin_providers() -> None:
                 key="volcengine",
                 display_name="火山引擎",
                 aliases=("火山引擎", "volcengine", "volc", "doubao", "bytedance", "ark"),
-                supported_categories=(ModelCategoryKey.image, ModelCategoryKey.video),
+                # 火山引擎方舟文本接口为 OpenAI 兼容协议，可直接用于剧本理解/分镜抽取等文本任务。
+                supported_categories=(
+                    ModelCategoryKey.text,
+                    ModelCategoryKey.image,
+                    ModelCategoryKey.video,
+                ),
                 default_base_url="https://ark.cn-beijing.volces.com/api/v3",
             ),
             ProviderSpec(

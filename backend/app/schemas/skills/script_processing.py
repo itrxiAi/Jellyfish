@@ -11,7 +11,7 @@ from app.schemas.skills.common import DialogueLine, DialogueLineMode, EvidenceSp
 from app.schemas.skills.film import Character, Location, Prop, Scene, ProjectCinematicBreakdown
 
 
-SceneTimeLoose = Literal["DAY", "NIGHT", "DAWN", "DUSK", "UNKNOWN", "日", "夜", "黎明", "黄昏", "不明", "未知"]
+SceneTimeLoose = Literal["DAY", "NIGHT", "DAWN", "DUSK", "UNKNOWN", "日", "夜", "黎明", "黄昏", "清晨", "傍晚", "不明", "未知"]
 
 
 class ShotDivision(BaseModel):

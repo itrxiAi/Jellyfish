@@ -18,6 +18,8 @@ def _to_sync_database_url(url: str) -> str:
         return "mysql+pymysql://" + url.removeprefix("mysql+aiomysql://")
     if url.startswith("sqlite+aiosqlite:///"):
         return "sqlite:///" + url.removeprefix("sqlite+aiosqlite:///")
+    if url.startswith("postgresql+asyncpg://"):
+        return "postgresql+psycopg2://" + url.removeprefix("postgresql+asyncpg://")
     return url
 
 

@@ -311,13 +311,22 @@ class AgentBase(ABC, Generic[T]):
         return output_model.model_validate(data)
 
     def extract(self, **kwargs: Any) -> T:
-        """执行：优先 with_structured_output，否则 run + format_output。"""
+        """执行：优先 with_structured_output，否则 run + format_output。
+
+        structured output 返回空列表（如 shots=[]）时，可能是 function calling
+        解析失败，此时 fallback 到文本解析路径重新提取。
+        """
         chain = self._get_structured_chain()
         if chain is not None:
             try:
                 state = chain.invoke(kwargs)
                 result = self._extract_structured_response(state)
                 if isinstance(result, self.output_model):
+                    # structured output 可能返回空列表（function calling 解析失败），
+                    # 此时 fallback 到文本解析路径，避免丢失 LLM 已生成的内容。
+                    _list = getattr(result, "shots", None)
+                    if _list is not None and hasattr(_list, "__len__") and len(_list) == 0:
+                        raise ValueError("structured output returned empty list, trying text fallback")
                     return cast(T, result)
                 if isinstance(result, dict):
                     data = self._normalize(result)
@@ -327,13 +336,16 @@ class AgentBase(ABC, Generic[T]):
         return self.format_output(self.run(**kwargs))
 
     async def aextract(self, **kwargs: Any) -> T:
-        """异步执行。"""
+        """异步执行。structured output 返回空列表时 fallback 到文本解析。"""
         chain = self._get_structured_chain()
         if chain is not None:
             try:
                 state = await chain.ainvoke(kwargs)
                 result = self._extract_structured_response(state)
                 if isinstance(result, self.output_model):
+                    _list = getattr(result, "shots", None)
+                    if _list is not None and hasattr(_list, "__len__") and len(_list) == 0:
+                        raise ValueError("structured output returned empty list, trying text fallback")
                     return cast(T, result)
                 if isinstance(result, dict):
                     data = self._normalize(result)
