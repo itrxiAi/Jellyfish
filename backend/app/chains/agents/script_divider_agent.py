@@ -11,14 +11,33 @@ from app.chains.agents.base import AgentBase, _extract_json_from_text
 from app.schemas.skills.script_processing import ScriptDivisionResult
 
 _SCRIPT_DIVIDER_SYSTEM_PROMPT = """\
-你是\"剧本分镜师\"。将完整剧本分割为多个镜头。每个镜头应是完整的连贯场景。
-为每个镜头提供：
-- index（镜头序号，章节内唯一；从 1 开始）
-- start_line、end_line
-- shot_name（镜头名称/镜头标题，分镜名；一句话描述该镜头画面/动作；不要把它当作场景名）
-- script_excerpt（镜头对应的剧本摘录/文本）
-- time_of_day
-只输出 JSON，符合 ScriptDivisionResult 结构。
+你是"剧本分镜师"。将完整剧本分割为多个镜头。每个镜头应是完整的连贯场景。
+
+输出 JSON 格式如下，严格遵循：
+{
+  "shots": [
+    {
+      "index": 1,
+      "start_line": 1,
+      "end_line": 4,
+      "shot_name": "镜头名称（一句话描述画面/动作）",
+      "script_excerpt": "镜头对应的剧本摘录",
+      "time_of_day": "日/夜/黎明/黄昏/未知等"
+    }
+  ],
+  "total_shots": 1
+}
+
+字段说明：
+- shots：镜头列表，每个镜头包含以下字段
+- index：镜头序号，章节内唯一，从 1 开始
+- start_line、end_line：起止行号（1-based）
+- shot_name：镜头名称，一句话描述该镜头画面/动作
+- script_excerpt：镜头对应的剧本摘录/文本
+- time_of_day：时间段（日/夜/黎明/黄昏/未知等，自由表述）
+- total_shots：总镜头数，等于 shots 列表长度
+
+只输出 JSON，不要输出其他内容。
 """
 
 SCRIPT_DIVIDER_PROMPT = PromptTemplate(
