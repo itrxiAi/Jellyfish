@@ -11,7 +11,9 @@ from app.schemas.skills.common import DialogueLine, DialogueLineMode, EvidenceSp
 from app.schemas.skills.film import Character, Location, Prop, Scene, ProjectCinematicBreakdown
 
 
-SceneTimeLoose = Literal["DAY", "NIGHT", "DAWN", "DUSK", "UNKNOWN", "日", "夜", "黎明", "黄昏", "清晨", "傍晚", "不明", "未知"]
+# time_of_day 不再限制枚举：LLM 可能返回各种中文/英文表述，
+# 强行限制枚举会反复出问题。接受任意字符串，后续按需归一化。
+SceneTimeLoose = str
 
 
 class ShotDivision(BaseModel):
@@ -25,7 +27,7 @@ class ShotDivision(BaseModel):
     script_excerpt: str = Field(..., description="镜头对应的剧本摘录/文本")
 
     shot_name: str = Field("", description="镜头名称（分镜名/镜头标题）")
-    time_of_day: Optional[SceneTimeLoose] = Field(None, description="时间（日/夜/未知等，可选）")
+    time_of_day: Optional[str] = Field(None, description="时间（日/夜/未知等，LLM 自由表述，可选）")
 
 
 class ScriptDivisionResult(BaseModel):
