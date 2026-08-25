@@ -52,6 +52,11 @@ class Settings(BaseSettings):
         return [x.strip() for x in s.split(",") if x.strip()]
 
     # S3 / 对象存储（用于素材文件）
+    # 兼容两种模式：
+    #   1) 直连 S3 兼容 API（MinIO / R2 S3 endpoint 等）：配置 s3_* 系列字段即可。
+    #   2) Cloudflare R2 via Worker + CDN（绕开 R2 S3 endpoint SSL 失败问题）：
+    #      配置 oss_upload_worker_url / oss_upload_secret / oss_cdn_domain。
+    # 两种模式同时配置时，Worker 模式优先（更稳定）。
     s3_endpoint_url: str | None = None
     s3_region_name: str | None = None
     s3_access_key_id: str | None = None
@@ -61,6 +66,19 @@ class Settings(BaseSettings):
     s3_base_path: str = ""
     # 可选：对外访问基址（CDN 或自定义域名），为空则使用 S3 自带 URL 或预签名 URL
     s3_public_base_url: str | None = None
+
+    # Cloudflare R2 via Worker 模式（推荐）
+    # Worker 上传代理 URL，例如 https://upload-test.harmonylink.app
+    # Worker 接受 PUT /upload/<key>?token=<HMAC token>，校验后通过 R2 binding 写入 bucket。
+    oss_upload_worker_url: str | None = None
+    # 与 Worker 共享的 HMAC secret（必须和 wrangler secret put UPLOAD_SECRET 一致）
+    oss_upload_secret: str | None = None
+    # CDN 公开访问域名（R2 Custom Domain 或 Public Dev URL），例如 https://cdns.harmonylink.app
+    oss_cdn_domain: str | None = None
+    # 上传 token 有效期（秒），默认 30 分钟
+    oss_upload_token_ttl: int = 1800
+    # 上传单文件大小上限（字节），默认 200MB，需与 Worker 端 maxBytes 一致
+    oss_upload_max_bytes: int = 200 * 1024 * 1024
 
     def model_post_init(self, __context: object) -> None:
         if not self.celery_broker_url or not str(self.celery_broker_url).strip():
