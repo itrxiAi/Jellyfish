@@ -97,3 +97,37 @@ async def upsert(
         linked_entity_id=body.character_id,
     )
     return row
+
+
+async def remove(
+    db: AsyncSession,
+    *,
+    shot_id: str,
+    character_id: str,
+) -> None:
+    """删除镜头-角色关联，并把对应候选标记回 pending。
+
+    不管 shot_character_links 表里有没有记录，都会尝试把候选表里
+    linked_entity_id 匹配的候选改回 pending，避免候选状态残留。
+    """
+    await require_entity(db, Shot, shot_id, detail=entity_not_found("Shot"))
+
+    # 1. 删除 shot_character_links 表里的关联记录（如果有）
+    stmt = select(ShotCharacterLink).where(
+        ShotCharacterLink.shot_id == shot_id,
+        ShotCharacterLink.character_id == character_id,
+    )
+    existing = (await db.execute(stmt)).scalars().one_or_none()
+    if existing is not None:
+        await db.execute(delete(ShotCharacterLink).where(ShotCharacterLink.id == existing.id))
+
+    # 2. 不管 link 表有没有记录，都把候选表里 linked_entity_id 匹配的候选改回 pending
+    character = await db.get(Character, character_id)
+    if character is not None and getattr(character, "name", None):
+        await mark_pending_by_name(
+            db,
+            shot_id=shot_id,
+            candidate_type="character",
+            candidate_name=str(character.name),
+        )
+    await db.commit()

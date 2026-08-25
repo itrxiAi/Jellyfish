@@ -18,6 +18,7 @@ import {
   StudioChaptersService,
   StudioEntitiesService,
   StudioProjectsService,
+  StudioShotCharacterLinksService,
   StudioShotDetailsService,
   StudioShotDialogLinesService,
   StudioShotsService,
@@ -238,6 +239,7 @@ export function ChapterShotEditPage() {
   const [dialogAddingKeys, setDialogAddingKeys] = useState<Record<string, boolean>>({})
   const [batchDialogAdding, setBatchDialogAdding] = useState(false)
   const [candidateActionIds, setCandidateActionIds] = useState<Record<number, boolean>>({})
+  const [unlinkingIds, setUnlinkingIds] = useState<Set<string>>(new Set())
   const [editorTabKey, setEditorTabKey] = useState<'basic' | 'confirm'>('basic')
   const [shotListFilter, setShotListFilter] = useState<ShotListFilter>('all')
   const dialogDebounceTimersRef = useRef<Map<number, number>>(new Map())
@@ -1127,6 +1129,31 @@ export function ChapterShotEditPage() {
     [applyPreparationState, candidateActionIds, loadPreparationState],
   )
 
+  /** 解除已关联角色：调用后端 DELETE 接口，刷新候选状态。 */
+  const unlinkAsset = useCallback(
+    async (asset: AssetVM) => {
+      if (!shotId || !asset.id || asset.kind !== 'actor') return
+      setUnlinkingIds((prev) => new Set(prev).add(asset.id!))
+      try {
+        await StudioShotCharacterLinksService.deleteShotCharacterLinkApiV1StudioShotCharacterLinksDelete({
+          shotId,
+          characterId: asset.id,
+        })
+        await loadPreparationState({ silent: true })
+        message.success('已解除关联')
+      } catch {
+        message.error('解除关联失败')
+      } finally {
+        setUnlinkingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(asset.id!)
+          return next
+        })
+      }
+    },
+    [loadPreparationState, shotId],
+  )
+
 
   const prefetchExistenceForNewAssets = useCallback(
     async (kind: AssetKind, items: AssetVM[]) => {
@@ -1449,6 +1476,8 @@ export function ChapterShotEditPage() {
             onToggleExpanded={toggleExpanded}
             onIgnoreCandidate={(asset) => void ignoreCandidate(asset)}
             onHandleNewAsset={(asset) => void handleNewAsset(asset)}
+            onUnlinkAsset={(asset) => void unlinkAsset(asset)}
+            unlinkingIds={unlinkingIds}
           />
 
           <Divider className="!my-1" />

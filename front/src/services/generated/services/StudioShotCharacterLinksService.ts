@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { ApiResponse_list_ShotCharacterLinkRead__ } from '../models/ApiResponse_list_ShotCharacterLinkRead__';
+import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_ShotCharacterLinkRead_ } from '../models/ApiResponse_ShotCharacterLinkRead_';
 import type { ShotCharacterLinkCreate } from '../models/ShotCharacterLinkCreate';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -48,6 +49,37 @@ export class StudioShotCharacterLinksService {
             url: '/api/v1/studio/shot-character-links',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * 删除镜头角色关联（ShotCharacterLink）
+     * 按 shot_id + character_id 删除关联，并把对应候选标记回 pending。
+     * @returns ApiResponse_NoneType_ Successful Response
+     * @throws ApiError
+     */
+    public static deleteShotCharacterLinkApiV1StudioShotCharacterLinksDelete({
+        shotId,
+        characterId,
+    }: {
+        /**
+         * 镜头 ID
+         */
+        shotId: string,
+        /**
+         * 角色 ID
+         */
+        characterId: string,
+    }): CancelablePromise<ApiResponse_NoneType_> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/v1/studio/shot-character-links',
+            query: {
+                'shot_id': shotId,
+                'character_id': characterId,
+            },
             errors: {
                 422: `Validation Error`,
             },

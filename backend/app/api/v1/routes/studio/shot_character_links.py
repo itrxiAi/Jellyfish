@@ -10,6 +10,7 @@ from app.schemas.common import ApiResponse, success_response
 from app.schemas.studio.cast import ShotCharacterLinkCreate, ShotCharacterLinkRead
 from app.services.studio.shot_character_links import (
     list_by_shot,
+    remove,
     upsert,
 )
 
@@ -43,3 +44,18 @@ async def upsert_shot_character_link(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return success_response(ShotCharacterLinkRead.model_validate(obj))
+
+
+@router.delete(
+    "",
+    response_model=ApiResponse[None],
+    summary="删除镜头角色关联（ShotCharacterLink）",
+)
+async def delete_shot_character_link(
+    shot_id: str = Query(..., description="镜头 ID"),
+    character_id: str = Query(..., description="角色 ID"),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    """按 shot_id + character_id 删除关联，并把对应候选标记回 pending。"""
+    await remove(db, shot_id=shot_id, character_id=character_id)
+    return success_response(None)

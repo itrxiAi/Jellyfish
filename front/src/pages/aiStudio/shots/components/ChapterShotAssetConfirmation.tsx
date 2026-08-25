@@ -30,6 +30,10 @@ type ChapterShotAssetConfirmationProps = {
   onToggleExpanded: (kind: AssetKind) => void
   onIgnoreCandidate: (asset: AssetVM) => void
   onHandleNewAsset: (asset: AssetVM) => void
+  /** 解除已关联资产（目前仅角色支持） */
+  onUnlinkAsset?: (asset: AssetVM) => void
+  /** 正在解除关联的资产 ID 集合，用于按钮 loading */
+  unlinkingIds?: Set<string>
 }
 
 function assetDetailUrl(kind: AssetKind, id: string, projectId: string) {
@@ -49,6 +53,8 @@ export function ChapterShotAssetConfirmation({
   onToggleExpanded,
   onIgnoreCandidate,
   onHandleNewAsset,
+  onUnlinkAsset,
+  unlinkingIds,
 }: ChapterShotAssetConfirmationProps) {
   const pendingCount = Object.values(unionAssets).reduce(
     (sum, items) => sum + items.filter((item) => item.status === 'new').length,
@@ -138,7 +144,23 @@ export function ChapterShotAssetConfirmation({
                   </Tooltip>
                 )}
               </div>
-              {asset.status === 'linked' ? <Tag color="blue">已关联</Tag> : <Tag color="magenta">新提取</Tag>}
+              {asset.status === 'linked' ? (
+                <div className="flex items-center gap-1 shrink-0">
+                  <Tag color="blue" className="!m-0">已关联</Tag>
+                  {asset.kind === 'actor' && asset.id && onUnlinkAsset ? (
+                    <Button
+                      size="small"
+                      type="text"
+                      danger
+                      className="!p-0 !h-auto !text-[11px]"
+                      loading={unlinkingIds?.has(asset.id) ?? false}
+                      onClick={() => onUnlinkAsset(asset)}
+                    >
+                      解除
+                    </Button>
+                  ) : null}
+                </div>
+              ) : <Tag color="magenta">新提取</Tag>}
             </div>
           }
           imageUrl={resolveAssetUrl(asset.thumbnail)}

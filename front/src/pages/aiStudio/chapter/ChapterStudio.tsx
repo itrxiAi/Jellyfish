@@ -2500,7 +2500,6 @@ const ChapterStudio: React.FC = () => {
                     ref={videoRef}
                     className="w-full h-full object-contain"
                     controls={false}
-                    muted
                     playsInline
                     preload="metadata"
                     src={currentPreviewVideoUrl || undefined}
@@ -2715,6 +2714,7 @@ const ChapterStudio: React.FC = () => {
                 onPatchShotDetailImmediate={patchShotDetailImmediate}
                 onSelectPreviewVideo={setPreviewVideoFileId}
                 onRefreshShotFrameImages={refreshShotFrameImages}
+                shots={shots}
                 onClose={() => setPrefs((p) => ({ ...p, inspectorOpen: false }))}
               />
             </Sider>
@@ -2789,6 +2789,7 @@ const ChapterStudio: React.FC = () => {
                     onPatchShotDetailImmediate={patchShotDetailImmediate}
                     onSelectPreviewVideo={setPreviewVideoFileId}
                     onRefreshShotFrameImages={refreshShotFrameImages}
+                    shots={shots}
                     onClose={() => setPrefs((p) => ({ ...p, inspectorOpen: false }))}
                   />
                 </div>
@@ -2935,6 +2936,8 @@ function Inspector(props: {
   onSelectPreviewVideo: (fileId: string) => void
   /** 下拉展开时拉取最新分镜帧图，用于「参考」关键帧类型选项动态更新 */
   onRefreshShotFrameImages?: () => Promise<void>
+  /** 当前章节所有镜头列表，用于跨镜头选择帧图片 */
+  shots?: StudioShot[]
 }) {
   const {
     projectId,
@@ -2973,11 +2976,19 @@ function Inspector(props: {
     onPatchShotDetailImmediate,
     onSelectPreviewVideo,
     onRefreshShotFrameImages,
+    shots,
   } = props
   const currentChapterId = chapterId ?? null
   const [imageVersion, setImageVersion] = useState('v1')
   const [refImageType, setRefImageType] = useState<string | undefined>(undefined)
   const [refFrameTypeSelectLoading, setRefFrameTypeSelectLoading] = useState(false)
+  // 跨镜头帧图片选择：在关键帧 Modal 里选其他镜头的帧图片作为当前帧使用
+  const [crossShotFrameOptions, setCrossShotFrameOptions] = useState<Array<{
+    value: string
+    label: string
+    fileId: string
+  }>>([])
+  const [crossShotFrameLoading, setCrossShotFrameLoading] = useState(false)
   const [useBoneDepth, setUseBoneDepth] = useState(false)
   const [audioMode, setAudioMode] = useState<'none' | 'prompt' | 'upload'>('none')
   const [hideShot, setHideShot] = useState(false)
@@ -4214,6 +4225,43 @@ function Inspector(props: {
     [onRefreshShotFrameImages],
   )
 
+  /**
+   * 加载当前章节其他镜头的帧图片，用于在关键帧 Modal 里跨镜头选择。
+   * 排除当前镜头，遍历其余镜头的 ShotFrameImage 记录，收集有 file_id 的条目。
+   */
+  const loadCrossShotFrameOptions = useCallback(async () => {
+    if (!shots || shots.length === 0) return
+    setCrossShotFrameLoading(true)
+    try {
+      const frameLabelMap: Record<string, string> = { first: '首帧', key: '关键帧', last: '尾帧' }
+      const opts: Array<{ value: string; label: string; fileId: string }> = []
+      for (const shot of shots) {
+        if (!shot.id || shot.id === selectedShot?.id) continue
+        try {
+          const res = await StudioShotFrameImagesService.listShotFrameImagesApiV1StudioShotFrameImagesGet({
+            shotDetailId: shot.id,
+            page: 1,
+            pageSize: 50,
+          })
+          for (const item of res.data?.items ?? []) {
+            if (!item.file_id) continue
+            const ft = String(item.frame_type)
+            opts.push({
+              value: String(item.file_id),
+              label: `第${shot.index}镜 · ${frameLabelMap[ft] ?? ft}`,
+              fileId: String(item.file_id),
+            })
+          }
+        } catch {
+          // 单个镜头加载失败不影响其他
+        }
+      }
+      setCrossShotFrameOptions(opts)
+    } finally {
+      setCrossShotFrameLoading(false)
+    }
+  }, [shots, selectedShot?.id])
+
   const refFrameTypeOptions = useMemo(() => {
     const kinds = new Set((frameImages ?? []).map((x) => x.frame_type))
     const opts: Array<{ value: string; label: string }> = []
@@ -4682,10 +4730,30 @@ function Inspector(props: {
         imageId: slot.id,
         requestBody: { file_id: fileId } as any,
       })
+      if (onRefreshShotFrameImages) await onRefreshShotFrameImages()
       await loadCardThumbs(frameType)
       message.success('已切换使用图片')
     } catch {
       message.error('切换失败')
+    } finally {
+      updateCardState(frameType, { applyingFileId: null })
+    }
+  }
+
+  /** 清空当前帧的使用图片（file_id 置空），用于取消导入的跨镜头图片。 */
+  const clearCardImage = async (frameType: PromptFrameType) => {
+    const slot = frameImages.find((x) => x.frame_type === frameType)
+    if (!slot) return
+    updateCardState(frameType, { applyingFileId: slot.file_id ? String(slot.file_id) : '' })
+    try {
+      await StudioShotFrameImagesService.updateShotFrameImageApiV1StudioShotFrameImagesImageIdPatch({
+        imageId: slot.id,
+        requestBody: { file_id: null } as any,
+      })
+      if (onRefreshShotFrameImages) await onRefreshShotFrameImages()
+      message.success('已取消使用')
+    } catch {
+      message.error('操作失败')
     } finally {
       updateCardState(frameType, { applyingFileId: null })
     }
@@ -4699,7 +4767,6 @@ function Inspector(props: {
     updateCardState(frameType, { deletingLinkId: linkId })
     try {
       await FilmService.deleteTaskLinkApiV1FilmTaskLinksLinkIdDelete({ linkId })
-      // 若删除的是当前使用中的图片，清空 slot 的 file_id
       const slot = frameImages.find((x) => x.frame_type === frameType)
       if (slot && String(slot.file_id) === fileId) {
         await StudioShotFrameImagesService.updateShotFrameImageApiV1StudioShotFrameImagesImageIdPatch({
@@ -4713,6 +4780,32 @@ function Inspector(props: {
       message.error('删除失败')
     } finally {
       updateCardState(frameType, { deletingLinkId: null })
+    }
+  }
+
+  /**
+   * 从其他镜头导入帧图片：设为当前帧的 file_id（即"使用中"）。
+   * 导入的图片不进入 AI 生成的历史列表，单独在"从其他镜头选择"区域显示。
+   */
+  const importCrossShotImage = async (frameType: PromptFrameType, fileId: string) => {
+    const slot = frameImages.find((x) => x.frame_type === frameType)
+    if (!slot) {
+      message.error('当前帧类型不存在')
+      return
+    }
+    updateCardState(frameType, { applyingFileId: fileId })
+    try {
+      await StudioShotFrameImagesService.updateShotFrameImageApiV1StudioShotFrameImagesImageIdPatch({
+        imageId: slot.id,
+        requestBody: { file_id: fileId } as any,
+      })
+      // 刷新 frameImages，让 inUseFileId 正确更新
+      if (onRefreshShotFrameImages) await onRefreshShotFrameImages()
+      message.success('已导入并使用')
+    } catch {
+      message.error('导入失败')
+    } finally {
+      updateCardState(frameType, { applyingFileId: null })
     }
   }
 
@@ -5092,12 +5185,23 @@ function Inspector(props: {
                         </div>
                         <div className="text-xs text-gray-500 min-h-5">{statusText}</div>
                         {st.thumbs.length === 0 ? (
-                          <div className="mt-2 h-24 border border-dashed rounded flex items-center justify-center text-xs text-gray-400">暂无图片</div>
+                          inUseFileId ? (
+                            <div className="mt-2 flex items-center gap-2">
+                              <img src={buildFileDownloadUrl(inUseFileId) ?? ''} alt="" className="w-16 h-16 rounded object-cover border border-blue-300 shrink-0" />
+                              <span className="text-xs text-blue-500">导入使用中</span>
+                            </div>
+                          ) : (
+                            <div className="mt-2 h-24 border border-dashed rounded flex items-center justify-center text-xs text-gray-400">暂无图片</div>
+                          )
                         ) : (
                           <div className="mt-2 flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1">
                             {st.thumbs.slice(0, 4).map((it) => (
                               <img key={it.linkId} src={it.thumbUrl} alt="" className="w-16 h-16 rounded object-cover border border-gray-200 shrink-0" />
                             ))}
+                            {/* 当前使用中的图片不在 AI 历史列表里时（跨镜头导入），额外显示 */}
+                            {inUseFileId && !st.thumbs.some((t) => t.fileId === inUseFileId) ? (
+                              <img src={buildFileDownloadUrl(inUseFileId) ?? ''} alt="" className="w-16 h-16 rounded object-cover border border-blue-300 shrink-0" title="导入的图片" />
+                            ) : null}
                           </div>
                         )}
                         <Modal title={`${frameLabel[ft]}图片`} open={st.modalOpen} onCancel={() => updateCardState(ft, { modalOpen: false })} footer={null} width={720}>
@@ -5283,6 +5387,46 @@ function Inspector(props: {
                                 </div>
                               )
                             })}
+                          </div>
+
+                          {/* 跨镜头选择：单独区域，和 AI 生成的历史列表分开 */}
+                          <div className="mt-4 border-t pt-3">
+                            <div className="text-sm font-medium text-gray-700 mb-2">从其他镜头选择</div>
+                            <div className="text-xs text-gray-500 mb-2">选择其他镜头的首帧/关键帧/尾帧，直接作为当前{frameLabel[ft]}使用</div>
+                            <Select
+                              showSearch
+                              allowClear
+                              placeholder="选择其他镜头的帧图片"
+                              className="w-full"
+                              loading={crossShotFrameLoading}
+                              options={crossShotFrameOptions}
+                              onDropdownVisibleChange={(open) => {
+                                if (open) void loadCrossShotFrameOptions()
+                              }}
+                              onChange={(val) => {
+                                if (val) void importCrossShotImage(ft, String(val))
+                              }}
+                              filterOption={(input, option) =>
+                                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                              }
+                            />
+                            {/* 显示当前导入的图片预览（如果使用中的图片不在 AI 历史列表里） */}
+                            {inUseFileId && !st.thumbs.some((t) => t.fileId === inUseFileId) ? (
+                              <div className="mt-2 border rounded p-2 max-w-[200px]">
+                                <img src={buildFileDownloadUrl(inUseFileId) ?? ''} alt="" className="w-full h-36 object-cover rounded" />
+                                <div className="mt-2 flex items-center justify-between">
+                                  <Tag color="blue">导入使用中</Tag>
+                                  <Button
+                                    size="small"
+                                    danger
+                                    loading={!!st.applyingFileId}
+                                    onClick={() => void clearCardImage(ft)}
+                                  >
+                                    取消使用
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
 
                           <Modal

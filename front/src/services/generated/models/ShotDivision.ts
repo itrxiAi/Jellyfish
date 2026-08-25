@@ -29,6 +29,6 @@ export type ShotDivision = {
     /**
      * 时间（日/夜/未知等，可选）
      */
-    time_of_day?: ('DAY' | 'NIGHT' | 'DAWN' | 'DUSK' | 'UNKNOWN' | '日' | '夜' | '黎明' | '黄昏' | '不明' | '未知' | null);
+    time_of_day?: ('DAY' | 'NIGHT' | 'DAWN' | 'DUSK' | 'UNKNOWN' | '日' | '夜' | '黎明' | '黄昏' | '清晨' | '傍晚' | '不明' | '未知' | null);
 };
 
