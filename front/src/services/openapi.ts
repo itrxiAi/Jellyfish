@@ -21,6 +21,7 @@ export function initOpenAPI(base: string = '') {
 
 const runtimeBackendUrl = window.__ENV?.BACKEND_URL
 const buildtimeBackendUrl = import.meta.env.VITE_BACKEND_URL
-const defaultBackendUrl = 'http://localhost:8000'
+// 开发模式默认直连本地后端；生产构建默认同源（走 nginx 反代）
+const defaultBackendUrl = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 initOpenAPI(runtimeBackendUrl ?? buildtimeBackendUrl ?? defaultBackendUrl)
