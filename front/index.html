@@ -7,6 +7,18 @@
     <title>Jellyfish</title>
     <!-- runtime env for Docker/Nginx: window.__ENV = { BACKEND_URL: "http://localhost:8000" } -->
     <script src="/env.js"></script>
+    <!-- crypto.randomUUID polyfill：HTTP 非 Secure Context 下浏览器不提供该 API -->
+    <script>
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
+        crypto.randomUUID = function () {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = (Math.random() * 16) | 0
+            var v = c === 'x' ? r : (r & 0x3) | 0x8
+            return v.toString(16)
+          })
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
