@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .env.local
+.env.prod
+env.prod
+.env.*.local
 .DS_Store
 *.log
 .pnpm-store/
@@ -22,3 +25,5 @@ htmlcov/
 .jellyfish.db
 jellyfish.db
 .env
+.env.prod
+env.prod
