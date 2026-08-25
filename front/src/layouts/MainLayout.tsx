@@ -168,7 +168,7 @@ const MainLayout: React.FC = () => {
       >
         <div className="flex items-center h-16 px-4 border-b border-solid" style={{ borderColor: token.colorBorderSecondary }}>
           <Link to="/projects" className="flex items-center gap-2 min-w-0">
-            <img src="/logo.svg" alt="Jellyfish" className="w-8 h-8 shrink-0" />
+            <img src="/logo.svg" alt="Pebblefish" className="w-8 h-8 shrink-0" />
             {!collapsed && (
               <div className="min-w-0">
                 <div className="text-base font-semibold text-gray-900 truncate">
